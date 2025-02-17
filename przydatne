@@ -22,3 +22,9 @@ function is_test(){
 // if(is_test()){
     // echo 'this is test';
 // }
+
+
+function enable_application_passwords_http($enabled) {
+    return true;
+}
+add_filter('wp_is_application_passwords_available', 'enable_application_passwords_http');
