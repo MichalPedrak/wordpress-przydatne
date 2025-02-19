@@ -28,3 +28,132 @@ function enable_application_passwords_http($enabled) {
     return true;
 }
 add_filter('wp_is_application_passwords_available', 'enable_application_passwords_http');
+
+
+
+
+
+add_action('woocommerce_order_status_changed', function($order_id, $old_status, $new_status) {
+
+
+    if ($new_status === 'processing') {
+        global $wpdb;
+
+
+        $order = wc_get_order($order_id);
+        if (!$order) return;
+
+        $customer_email = $order->get_billing_email();
+
+        if ($customer_email) {
+
+            $table_name = $wpdb->prefix . 'shopmagic_automation_outcome';
+            $wpdb->query(
+                $wpdb->prepare(
+                    'DELETE FROM ' . $table_name . ' WHERE customer_email = "%s" AND finished = 0',
+                    $customer_email
+                )
+            );
+
+
+            global $wpdb;
+            $actionscheduler_table = $wpdb->prefix . 'actionscheduler_actions';
+            $shopmagic_table = $wpdb->prefix . 'shopmagic_guest';
+ 
+            // SELECT * from zQQXaxqwf_shopmagic_guest WHERE email = "rayangosling@stellarwise.pl" LIMIT 10;
+
+
+            
+            $query = "SELECT a.action_id, a.args FROM {$actionscheduler_table} a WHERE hook = 'shopmagic/core/queue/execute' AND status = 'pending';";
+
+
+            $results = $wpdb->get_results(
+                $query
+            );
+
+
+            $actionIdCustomerId= [];
+
+            // GET ALL CUSTOMERS ID
+            foreach($results as $result){
+              
+                foreach(json_decode($result->args, true) as $property){
+                   
+                    if(!empty($property['customer_id'])){
+                            
+                        array_push($actionIdCustomerId, [ str_replace('g_','',$property['customer_id']) => $result->action_id ]);
+                        continue;
+                    }
+                }
+            }
+
+ 
+
+            $ids = array_values($actionIdCustomerId);
+
+            $customer_ids = [];
+
+            foreach($ids as $id){
+                array_push($customer_ids, array_keys($id)[0]);
+            }
+
+       
+
+            $placeholders = implode(',', array_fill(0, count($actionIdCustomerId), '%d')); 
+
+            $query = "SELECT ID, email FROM {$shopmagic_table} sm WHERE ID IN  ($placeholders)";
+
+            $prepared = $wpdb->prepare($query, ...$customer_ids);
+
+            $results = $wpdb->get_results(
+                $prepared
+            );
+
+
+            $ids = [];
+
+            foreach($results as $result){
+                if($result->email == $customer_email){
+                    array_push($ids, $result->ID );
+                }
+            }
+
+ 
+            
+            // string(103) "SELECT ID, email FROM zQQXaxqwf_shopmagic_guest sm WHERE ID IN (6,12688,11631,11632,11632,11632,11632)" array(3) { [0]=> object(stdClass)#9855 (2) { ["ID"]=> string(1) "6" ["email"]=> string(23) "m.pedrak@stellarwise.pl" } [1]=> object(stdClass)#9815 (2) { ["ID"]=> string(5) "11631" ["email"]=> string(27) "michalpedrak07+12@gmail.com" } [2]=> object(stdClass)#9719 (2) { ["ID"]=> string(5) "11632" ["email"]=> string(27) "rayangosling@stellarwise.pl" } }
+            $ids_to_delete = [];
+
+
+            $grouped = [];
+            foreach ($actionIdCustomerId as $item) {
+
+                foreach ($item as $key => $value) {
+                    if (!isset($grouped[$key])) {
+                        $grouped[$key] = [$value]; // First value as array
+                    } else {
+                        $grouped[$key][] = $value; // Append duplicates
+                    }
+                }
+            }
+ 
+
+            foreach($ids as $id){
+                array_push($ids_to_delete, $grouped[$id]);
+            }
+
+            $placeholders = implode(',', array_fill(0, count($ids_to_delete[0]), '%d')); 
+
+            $query = "DELETE FROM {$actionscheduler_table} WHERE action_id IN ($placeholders)";
+
+            $prepared = $wpdb->prepare($query, ...$ids_to_delete);
+            
+
+            $results = $wpdb->query(
+                $prepared
+            );
+
+        }
+    }
+
+
+}, 10, 3);
