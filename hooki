@@ -1,0 +1,327 @@
+add_action('woocommerce_order_status_changed', function($order_id, $old_status, $new_status) {
+
+
+    if ($new_status === 'processing') {
+        global $wpdb;
+
+
+        $order = wc_get_order($order_id);
+        if (!$order) return;
+
+        $customer_email = $order->get_billing_email();
+
+        if ($customer_email) {
+
+            $table_name = $wpdb->prefix . 'shopmagic_automation_outcome';
+            $wpdb->query(
+                $wpdb->prepare(
+                    'DELETE FROM ' . $table_name . ' WHERE customer_email = "%s" AND finished = 0',
+                    $customer_email
+                )
+            );
+
+
+            global $wpdb;
+            $actionscheduler_table = $wpdb->prefix . 'actionscheduler_actions';
+            $shopmagic_table = $wpdb->prefix . 'shopmagic_guest';
+ 
+            // SELECT * from zQQXaxqwf_shopmagic_guest WHERE email = "rayangosling@stellarwise.pl" LIMIT 10;
+            // SELECT a.action_id, a.args FROM zQQXaxqwf_actionscheduler_actions a WHERE hook = 'shopmagic/core/queue/execute' AND status = 'pending';
+            //SELECT * from zQQXaxqwf_actionscheduler_actions WHERE action_id = 1664223;
+            
+            $query = "SELECT a.action_id, a.args FROM {$actionscheduler_table} a WHERE hook = 'shopmagic/core/queue/execute'";
+
+
+            $results = $wpdb->get_results(
+                $query
+            );
+      
+
+            $actionIdCustomerId= [];
+
+            $actionIdCustomerEmail = [];
+ 
+            // GET ALL CUSTOMERS ID
+            foreach($results as $result){
+              
+                foreach(json_decode($result->args, true) as $property){
+                   
+                    if(!empty($property['customer_id'])){
+
+                        $customer_id = $property['customer_id'];
+                            
+                         if(substr($property['customer_id'], 0,2) == 'g_'){
+                            array_push($actionIdCustomerId, [ str_replace('g_','',$customer_id) => $result->action_id ]);
+                         } else {
+
+                            $user = get_userdata($property['customer_id']);
+                            if($user){
+
+                                if (!isset($actionIdCustomerEmail[$user->user_email] )) {
+                                    $actionIdCustomerEmail[$user->user_email] = [$result->action_id];
+                                } else {
+                                    $actionIdCustomerEmail[$user->user_email][] = $result->action_id;
+                                }
+                            }
+                         }
+                   
+                        continue;
+                    }
+                }
+            }
+
+
+
+            if(!empty($actionIdCustomerId)){
+                deleteGuestsActions($actionIdCustomerId, $customer_email);
+            }
+
+            if(!empty($actionIdCustomerEmail)){
+                deleteCustomersActions($actionIdCustomerEmail, $customer_email);
+            }
+            
+        }
+    }
+
+}, 10, 3);
+
+
+
+
+function deleteCustomersActions($actionIdCustomerEmail, $customer_email){
+
+
+    global $wpdb;
+    $actionscheduler_table = $wpdb->prefix . 'actionscheduler_actions';
+    $shopmagic_table = $wpdb->prefix . 'shopmagic_guest';
+
+    $idsArrays = [];
+
+
+    foreach($actionIdCustomerEmail as $key => $value){
+
+        if($key  == $customer_email){
+            array_push($idsArrays, $value );
+        }
+    }
+
+
+    general_log(print_r('Użytkownicy', true));
+
+
+    if(empty($idsArrays)) return;
+
+    $placeholders = implode(',', array_fill(0, count($idsArrays[0]), '%d')); 
+
+
+    $querySelect = "SELECT * FROM {$actionscheduler_table} WHERE action_id IN ($placeholders)";
+
+    $preparedSelect = $wpdb->prepare($querySelect, ...$idsArrays);
+    
+
+    $resultsSelect = $wpdb->get_results(
+        $preparedSelect
+    );
+
+
+    general_log(print_r($resultsSelect, true));
+
+
+
+    // DELETE from ACTION TABLE
+
+    $query = "DELETE FROM {$actionscheduler_table} WHERE action_id IN ($placeholders)";
+
+    $prepared = $wpdb->prepare($query, ...$idsArrays);
+    
+    general_log(print_r($customer_email . ' ' . $prepared, true));
+
+    $results = $wpdb->query(
+        $prepared
+    );
+    
+
+
+}
+
+
+function deleteGuestsActions($actionIdCustomerId, $customer_email){
+
+
+
+    global $wpdb;
+    $actionscheduler_table = $wpdb->prefix . 'actionscheduler_actions';
+    $shopmagic_table = $wpdb->prefix . 'shopmagic_guest';
+
+
+
+
+    $ids = array_values($actionIdCustomerId);
+
+    $customer_ids = [];
+
+    foreach($ids as $id){
+        array_push($customer_ids, array_keys($id)[0]);
+    }
+
+
+    $placeholders = implode(',', array_fill(0, count($actionIdCustomerId), '%d')); 
+
+    $query = "SELECT ID, email FROM {$shopmagic_table} sm WHERE ID IN  ($placeholders)";
+
+    $prepared = $wpdb->prepare($query, ...$customer_ids);
+
+    $results = $wpdb->get_results(
+        $prepared
+    );
+  
+
+
+
+    $ids = [];
+
+    foreach($results as $result){
+     
+        if($result->email == $customer_email){
+            array_push($ids, $result->ID );
+        }
+    }
+
+
+
+    // string(103) "SELECT ID, email FROM zQQXaxqwf_shopmagic_guest sm WHERE ID IN (6,12688,11631,11632,11632,11632,11632)" array(3) { [0]=> object(stdClass)#9855 (2) { ["ID"]=> string(1) "6" ["email"]=> string(23) "m.pedrak@stellarwise.pl" } [1]=> object(stdClass)#9815 (2) { ["ID"]=> string(5) "11631" ["email"]=> string(27) "michalpedrak07+12@gmail.com" } [2]=> object(stdClass)#9719 (2) { ["ID"]=> string(5) "11632" ["email"]=> string(27) "rayangosling@stellarwise.pl" } }
+    $ids_to_delete = [];
+
+
+    // Flatten array 
+
+    $grouped = [];
+    foreach ($actionIdCustomerId as $item) {
+
+        foreach ($item as $key => $value) {
+
+            
+            if(in_array($key, $ids)){
+                if (!isset($grouped[$key])) {
+                    $grouped[$key] = [$value]; 
+                } else {
+                    $grouped[$key][] = $value; 
+                }
+            }
+        }
+    }
+
+
+
+
+
+
+    foreach ($grouped as $id) {
+       
+        foreach ($id as $key => $value) {
+         
+            array_push($ids_to_delete, $value); 
+           
+        }
+    }
+
+
+
+
+    if(empty($ids_to_delete)) return;
+
+    // function from this
+
+    $placeholders = implode(',', array_fill(0, count($ids_to_delete), '%d')); 
+    
+
+    $querySelect = "SELECT * FROM {$actionscheduler_table} WHERE action_id IN ($placeholders)";
+
+    $preparedSelect = $wpdb->prepare($querySelect, ...$ids_to_delete);
+    
+
+    $resultsSelect = $wpdb->get_results(
+        $preparedSelect
+    );
+
+
+
+    general_log(print_r($resultsSelect, true));
+
+
+    $query = "DELETE FROM {$actionscheduler_table} WHERE action_id IN ($placeholders)";
+
+    $prepared = $wpdb->prepare($query, ...$ids_to_delete);
+    
+    general_log(print_r($customer_email . ' ' . $prepared, true));
+
+
+    $results = $wpdb->query(
+        $prepared
+    );
+    
+
+
+}
+add_action('woocommerce_review_order_before_submit', 'custom_newsletter_checkbox', 5, 1);
+
+function custom_newsletter_checkbox() {
+
+    woocommerce_form_field('mailerlite_checkout_consent', array(
+        'type'          => 'checkbox',
+        'class'         => array('form-row mycheckbox'), 
+        'label_class'   => array('woocommerce-form__label woocommerce-form__label-for-checkbox checkbox f-checkout-field f-checkout-field--checkbox'),
+        'input_class'   => array('woocommerce-form__input woocommerce-form__input-checkbox input-checkbox'),
+        'required'      => false, 
+        'label'         => 'Zapisz się do newslettera aby być na bieżąco z nowymi produktami i ofertami! ',
+    ));
+
+}
+
+
+add_action('woocommerce_checkout_update_order_meta', 'custom_save_newsletter_checkbox');
+
+function custom_save_newsletter_checkbox($order_id) {
+    if (!empty($_POST['mailerlite_checkout_consent'])) {
+        update_post_meta($order_id, 'mailerlite_checkout_consent', 'yes');
+    } else {
+        update_post_meta($order_id, 'mailerlite_checkout_consent', 'no');
+    }
+}
+
+
+add_action('woocommerce_checkout_order_processed', 'custom_add_to_mailerlite', 10, 1);
+
+function custom_add_to_mailerlite($order_id) {
+    if (!$order_id) return;
+
+    $order = wc_get_order($order_id);
+    $email = $order->get_billing_email();
+    $newsletter_signup = get_post_meta($order_id, 'mailerlite_checkout_consent', true);
+
+    if ($newsletter_signup === 'yes') {
+        $api_key = MAILERLITE_TOKEN; 
+        $group_id = MAILERLITE_GROUP_ID;
+
+        
+        $data = array(
+            'email'  => $email,
+            'groups' => [$group_id]
+        );
+
+        $args = array(
+            'body'    => json_encode($data),
+            'headers' => array(
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $api_key
+            ),
+            'method'  => 'POST'
+        );
+
+        $response = wp_remote_post('https://connect.mailerlite.com/api/subscribers', $args);
+
+        if (is_wp_error($response)) {
+            error_log('MailerLite API error: ' . $response->get_error_message());
+        }
+    }
+}
