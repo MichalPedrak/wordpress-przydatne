@@ -1,0 +1,58 @@
+zip -r uploads.zip uploads/ -x uploads/2021/\* -x uploads/2022/\* -x uploads/2023/\* -x uploads/2024/\* -x uploads/2024.zip  -x uploads/2023.zip -x uploads/2022.zip -x uploads/2021.zip
+
+
+
+
+Wysłano
+1  cd domains/
+    2  ls
+    3  cd amyris.pl/
+    4  ls
+    5  zip -r amyris.zip public_html/ -x public_html/wp-content/uploads/\* -x public_html/wp-content/updraft/\*
+    6  ls
+    7  ls -l
+    8  pwd
+    9  mv amyris.zip /home/yyofhybapt/domains/amyris.pl/public-html/amyris.zip
+   10  mv amyris.zip /home/yyofhybapt/domains/amyris.pl/public-html/
+   11  ls
+   12  mv amyris.zip /home/yyofhybapt/domains/amyris.pl/public-html
+   13  ls
+   14  cd public_html/
+   15  ls
+   16  ls -l
+   17  cd ..
+   18  ls
+   19  ls -l
+   20  cd public-html
+   21  ls
+   22  zip -r amyris.zip public_html/ -x public_html/wp-content/uploads/\* -x public_html/wp-content/updraft/\*
+   23  ls
+   24  mv amyris.zip /home/yyofhybapt/domains/amyris.pl/public_html/amyris.zip
+   25  cd public_html/
+   26  ;s
+   27  ls
+   28  cd wp-content/
+   29  ls
+   30  cd uploads/
+   31  ls
+   32  zip 2021/ 2021.zip
+   33  zip 2021.zip 2021/
+   34  ls -l
+   35  ls
+   36  zip 2021/ 2021.zip
+   37  zip 2021.zip 2021
+   38  zip 2021.zip 2021/10/
+   39  zip 2021.zip 2021/
+   40  zip 2022.zip 2022/
+   41  zip 2023.zip 2023/
+   42  zip -r 2021.zip 2021/
+   43  zip -r 2022.zip 2022/
+   44  zip -r 2023.zip 2023/
+   45  zip -r 2024.zip 2024/
+   46  cd ..
+   47  ls
+   48  zip -r uploads.zip uploads/ -x uploads/2021/\* -x uploads/2022/\* -x uploads/2023/\* -x uploads/2024/\* -x uploads/2024.zip  -x uploads/2023.zip -x uploads/2022.zip -x uploads/2021.zip
+   49  ls
+   50  mysqldump -u yyofhybapt_wp3 -p yyofhybapt_wp3 > data-amyris.sql
+   51  ls
+   52  history
